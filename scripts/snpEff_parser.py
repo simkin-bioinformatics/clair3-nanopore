@@ -1,8 +1,21 @@
 '''
 parses the annotations of snpEff to output an AA table file for downstream use.
-The current version is hard-coded to analyze a VCF file that only contains a
-single sample, but future versions will be able to analyze multiple samples
-simultaneously.
+The current version does not handle targeted vs. nontargeted mutations. Basic
+algorithm is as follows:
+1. reads through a vcf file and stores sample columns
+2. upon reaching a snpEff line, iterates first through all samples, then all 15
+fields of snpEff. Because a single snpEff VCF line can contain multiple
+mutations, any field that has remainder 0 in modulo 15 is treated as the
+beginning of a new mutation. All fields are then stored in a nested dictionary,
+keyed first by sample and then by mutation. format and clair3 output are also
+captured
+3. Search the gff file to look up gene names associated with gene IDs and use
+snpEff annotations to fill in the 'header' portion of each mutation. Parse out
+the clair3 'AD' field values into cov, ref, and alt, where ref is the first 'AD'
+value, alt is the second, and coverage is the ref+alt (I don't use DP for
+coverage because DP is always slightly bigger than summed AD values - probably
+due to reads that clair3 considers 'sequencing error').
+4. convert snpEff header fields and counts to AA tables.
 
 The 6 AA table fields are:
 Gene ID
@@ -29,13 +42,13 @@ By comparison, the 15 fields snpEff outputs are:
  AA.pos / AA.length 
  Distance 
 
-The field mapping (0-based) to the 6 fields of the AA table are as follows:
-Gene ID: 4
-Gene: 3 (but really should come from a Gene-ID to gene-name supplemental table or parsed GFF file)
-Mutation Name: 3 then dash then 10
-ExonicFunc: 1
-AA Change: 10
-Targeted: needs supplemental table
+The mapping of snpEff onto AA table is:
+Gene_ID->Gene ID
+Annotation->ExonicFunc,
+gff lookup of Name associated with Gene_ID->Gene
+HGVS.p->AA Change
+Gene+AA Change->Mutation Name
+Targeted - currently hardcoded as 'unspecified'
 '''
 
 #input_vcf='annotated_variants.vcf'
