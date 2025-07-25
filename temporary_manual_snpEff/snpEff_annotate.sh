@@ -1,0 +1,1 @@
+java -Xmx10g -jar snpEff.jar plasmoDB_3D7_v62 /home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/scratch_space/finished_clair3/merge_output.vcf.gz -stats snpEff_summary.html >annotated_variants.vcf
