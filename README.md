@@ -1,7 +1,15 @@
 # clair3-nanopore
 
+The goal of this pipeline is to convert raw Nanopore reads into tables that list
+the number of reads that support different amino acid mutations in each sample.
+These AA tables are suitable for calculating prevalences, as well as for
+graphing and visualizing mutations.
+
+The visualization part is handled by another repo, here:
+(https://github.com/simkin-bioinformatics/seekdeep_amplicon_visualization)
+
 This repository is being written collaboratively as part of a tutorial.
-Eventually it will hold complete instructions for the following steps:
+Eventually it will automatically perform the following steps:
 
 - concatenating reads with a custom function
 - aligning reads with minimap2
@@ -9,20 +17,35 @@ Eventually it will hold complete instructions for the following steps:
 - manipulating clair3 outputs to contain variant calls for variants of interest
 - reformatting output vcf files for compatibility with SNPEff
 
-The current version takes a (hardcoded) fastq folder and (hardcoded) genome
-folder and runs minimap2 on all samples in parallel.
+## Current progress:
 
-## temporary manual clair3
+- concatenated reads are aligned with minimap2
+- alignments are converted to bam, sorted, and indexed
+- genome gets indexed with samtools faidx
+- aligned reads are variant called with clair3 to produce VCF outputs
+- a custom script copies gff and genome files for snpEff
+- snpEff builds a database from gff and genome files
+- snpEff annotates VCF files
 
-This is a temporary folder that contains example commands that a user can run in
-order to run clair3 manually. This folder assumes that you have already run
-minimap2 using the align_minimap.smk script.
+## Next Steps (not implemented yet):
 
-The preparing_bam_reads.sh file includes example commands for indexing a genome
-(the faidx command), converting a sam file to a bam format (the samtools view
-command), sorting the sam file (the samtools sort command) and indexing the bam
-file (the samtools index command).
+- snpEff VCF gets converted to AA tables with custom script
+- add ability to correctly parse "targeted" mutation depths
+- incorporate snpEff converter into snakemake pipeline
+- add ability to concatenate raw nanopore reads (near beginning of pipeline)
+- more detailed yaml file instructions
 
-The running_clair3.sh script includes example commands for running clair3 on an
-example sample. This temporary folder will go away once we have incorporated
-these commands into our main snakemake script.
+## How to run the pipeline:
+
+1. Clone this github repository.
+2. Obtain and install a copy of mamba or micromamba (you can google this).
+3. Create a new conda environment, e.g. with mamba env create -n clair3.
+4. Activate your new environment, and install the following conda packages in
+   your environment: clair3, snakemake, minimap2, bcftools, samtools.
+5. Install snpEff (for me a quick google search revealed that this involves wget
+   of snpEff and unzipping a folder).
+6. cd into the github repository folder, edit the yaml file using the
+instructions, and run the program with this command:
+`shell
+snakemake -s nanopore_variant_annotation.smk --cores 4
+`
