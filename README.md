@@ -44,8 +44,9 @@ tutorial. Eventually it will automatically perform the following steps:
    your environment: clair3, snakemake, minimap2, bcftools, samtools.
 5. Install snpEff (for me a quick google search revealed that this involves wget
    of snpEff and unzipping a folder).
-6. cd into the github repository folder, edit the yaml file using the
-instructions, and run the program with this command:
+6. cd into the github repository folder, edit the
+   nanopore_variant_annotation.yaml file using the instructions provided in the
+   yaml file, and run the program with this command:
 
 `shell
 snakemake -s nanopore_variant_annotation.smk --cores 4
