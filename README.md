@@ -8,8 +8,8 @@ graphing and visualizing mutations.
 The visualization part is handled by another repo, here:
 (https://github.com/simkin-bioinformatics/seekdeep_amplicon_visualization)
 
-This repository is being written collaboratively as part of a tutorial.
-Eventually it will automatically perform the following steps:
+This clair3-nanopore repository is being written collaboratively as part of a
+tutorial. Eventually it will automatically perform the following steps:
 
 - concatenating reads with a custom function
 - aligning reads with minimap2
@@ -46,6 +46,7 @@ Eventually it will automatically perform the following steps:
    of snpEff and unzipping a folder).
 6. cd into the github repository folder, edit the yaml file using the
 instructions, and run the program with this command:
+
 `shell
 snakemake -s nanopore_variant_annotation.smk --cores 4
 `
