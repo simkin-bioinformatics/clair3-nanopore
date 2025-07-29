@@ -65,7 +65,7 @@ def make_targets_dict(targets_tsv, gene_mappings):
 	sequencing depths.
 	'''
 	#[f'{ref+alt},{ref},{alt}', Gene_ID, gene_name, Mutation_Name, ExonicFunc, AA_change, targeted]
-	targets_dict={}
+	targets_dict, targeted_mutations={}, []
 	for line_number, line in enumerate(open(targets_tsv)):
 		if line_number>0:
 			line=line.strip().split('\t')
@@ -78,7 +78,8 @@ def make_targets_dict(targets_tsv, gene_mappings):
 			targets_dict[chrom].setdefault(pos, {})
 			targets_dict[chrom][pos].setdefault(ref, {})
 			targets_dict[chrom][pos][ref][alt]=[gene_ID, gene_name, mutation_name, 'missense_mutation', mut, 'Yes']
-	return targets_dict
+			targeted_mutations.append(mutation_name)
+	return targets_dict, targeted_mutations
 
 def extract_counts(labels, values):
 	labels=labels.split(':')
@@ -99,14 +100,14 @@ def extract_counts(labels, values):
 		print('weird depths', labels, values)
 	return ref, alt
 
-def check_targeted(vcf_line, targets_dict, depth_dict, samples):
+def check_unannotated_targeted(vcf_line, targets_dict, depth_dict, samples, mutation_number):
 	'''
-	checks a vcf_line to see if it's "targeted" using targets_dict and extracts
+	This function only applies to vcf entries that have no snpEff annotation.
+	Checks a vcf_line to see if it's "targeted" using targets_dict and extracts
 	reference and alternate counts for each sample if it is targeted. Outputs
 	the resulting depths to depth_dict
 	'''
 	chrom, pos, ID, ref_allele, alt_allele=vcf_line[:5]
-	mutation_number=1
 	if chrom in targets_dict and pos in targets_dict[chrom] and ref_allele in targets_dict[chrom][pos]:
 		for alt_allele in targets_dict[chrom][pos][ref_allele]:
 			header_list=targets_dict[chrom][pos][ref_allele][alt_allele]
@@ -116,7 +117,7 @@ def check_targeted(vcf_line, targets_dict, depth_dict, samples):
 				depth_dict.setdefault(sample, {})
 				depth_dict[sample][mutation_number]=[f'{ref+alt},{ref},{alt}']+header_list
 			mutation_number+=1
-	return depth_dict
+	return depth_dict, mutation_number
 
 def parse_vcf_file(input_vcf, targets_dict):
 	'''
@@ -124,7 +125,7 @@ def parse_vcf_file(input_vcf, targets_dict):
 	information and depths associated with the snpeff annotations
 	'''
 	ann_dict, target_depth_dict={},{}
-	parsed_counter=0
+	parsed_counter, mutation_number=0,1
 	if input_vcf.endswith('.gz'):
 		import gzip
 		file_handle=gzip.open(input_vcf, mode='rt')
@@ -145,7 +146,7 @@ def parse_vcf_file(input_vcf, targets_dict):
 						ann_dict[sample].setdefault(parsed_counter, [line[8]+';'+line[9+sample_number]])
 					ann_dict[sample][parsed_counter].append(column)
 		elif len(line)>7 and not line[0].startswith('#'):
-			target_depth_dict=check_targeted(line, targets_dict, target_depth_dict, samples)
+			target_depth_dict, mutation_number=check_unannotated_targeted(line, targets_dict, target_depth_dict, samples, mutation_number)
 	return ann_dict, target_depth_dict
 
 def convert_count(count):
@@ -155,7 +156,7 @@ def convert_count(count):
 		count=0
 	return count
 
-def parse_annotations(ann_dict, gene_mappings):
+def parse_annotations(ann_dict, gene_mappings, targeted_mutations):
 	'''
 	extracts only columns of interest from the annotation dictionary
 	'''
@@ -169,12 +170,14 @@ def parse_annotations(ann_dict, gene_mappings):
 				Gene_ID=columns[5]
 				gene_name=gene_mappings[columns[4]]
 				AA_change=columns[11][2:]
-				Mutation_Name=gene_name+'-'+AA_change
+				mutation_name=gene_name+'-'+AA_change
 				ExonicFunc=columns[2]
-				targeted='unspecified'
+				targeted='No'
+				if mutation_name in targeted_mutations:
+					targeted='Yes'
 				labels, values=vcf_fields.split(';')
 				ref, alt=extract_counts(labels, values)
-				protein_dict[sample][mut]=[f'{ref+alt},{ref},{alt}', Gene_ID, gene_name, Mutation_Name, ExonicFunc, AA_change, targeted]
+				protein_dict[sample][mut]=[f'{ref+alt},{ref},{alt}', Gene_ID, gene_name, mutation_name, ExonicFunc, AA_change, targeted]
 	return protein_dict
 
 
@@ -202,28 +205,32 @@ def get_targeted_status(input_tsv, snpeff_dict):
 	snpeff_dictionary is a 'targeted' mutation of interest or not.
 	'''
 
-def format_header(output_file, protein_dict):
+def format_header(output_file, protein_dict, targeted_depth_dict):
 	first_sample=list(protein_dict.keys())[0]
 	header_names=['Gene ID', 'Gene', 'Mutation Name', 'ExonicFunc', 'AA Change', 'Targeted']
 	for row_number, name in enumerate(header_names):
 		output_line=[name]
 		for mut in protein_dict[first_sample]:
 			output_line.append(protein_dict[first_sample][mut][row_number+1])
+		for mut in targeted_depth_dict[first_sample]:
+			output_line.append(targeted_depth_dict[first_sample][mut][row_number+1])
 		output_file.write(','.join(output_line)+'\n')
 
-def output_tables(protein_dict, output_folder):
+def output_tables(protein_dict, targeted_depth_dict, output_folder):
 	for file_number, output_path in enumerate(['coverage_AA_table.csv', 'reference_AA_table.csv', 'alternate_AA_table.csv']):
 		output_file=open(output_folder+'/'+output_path, 'w')
-		format_header(output_file, protein_dict)
+		format_header(output_file, protein_dict, targeted_depth_dict)
 		for sample in protein_dict:
 			output_line=[sample]
 			for mut in protein_dict[sample]:
 				output_line.append(protein_dict[sample][mut][0].split(',')[file_number])
+			for mut in targeted_depth_dict[sample]:
+				output_line.append(targeted_depth_dict[sample][mut][0].split(',')[file_number])
 			output_file.write(','.join(output_line)+'\n')
 
 gene_mappings=grab_gene_mappings(input_gff)
-targets_dict=make_targets_dict(targets_tsv, gene_mappings)
+targets_dict, targeted_mutations=make_targets_dict(targets_tsv, gene_mappings)
 ann_dict, targeted_depth_dict=parse_vcf_file(input_vcf, targets_dict)
 print('targeted dict is', targeted_depth_dict)
-protein_dict=parse_annotations(ann_dict, gene_mappings)
-output_tables(protein_dict, 'test_folder')
+protein_dict=parse_annotations(ann_dict, gene_mappings, targeted_mutations)
+output_tables(protein_dict, targeted_depth_dict, 'test_folder')
