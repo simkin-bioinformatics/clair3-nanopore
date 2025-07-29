@@ -52,15 +52,78 @@ Targeted - currently hardcoded as 'unspecified'
 '''
 
 #input_vcf='annotated_variants.vcf'
-input_vcf='/home/alfred/github_pipelines/MIPTools/tutorial/output2/stats_and_variant_calling/split.ann.variants.vcf.gz'
+input_vcf='/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/clair3-nanopore/bienvenu_targeted_nanopore_alignment_no_filters/snp_Eff_output/annotated_variants.vcf'
 input_gff='/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/snpEff/example_UCSC_gff_file/PlasmoDB-62_Pfalciparum3D7.gff'
+targets_tsv='/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/targets.tsv'
 
-def parse_vcf_file(input_vcf):
+def make_targets_dict(targets_tsv, gene_mappings):
+	'''
+	converts a targets.tsv file into a dictionary, such that the chromosome,
+	reference allele, and alternate allele can be easily compared against
+	entries from a vcf file. The bottom layer is a header that can be added to
+	an output AA table. A later function will examine the VCF file lines and add
+	sequencing depths.
+	'''
+	#[f'{ref+alt},{ref},{alt}', Gene_ID, gene_name, Mutation_Name, ExonicFunc, AA_change, targeted]
+	targets_dict={}
+	for line_number, line in enumerate(open(targets_tsv)):
+		if line_number>0:
+			line=line.strip().split('\t')
+			chrom, pos, ID, ref, alt=line[0:5]
+			mut=line[7]
+			gene_ID=line[11]
+			gene_name=gene_mappings[gene_ID]
+			mutation_name=gene_name+'-'+mut
+			targets_dict.setdefault(chrom, {})
+			targets_dict[chrom].setdefault(pos, {})
+			targets_dict[chrom][pos].setdefault(ref, {})
+			targets_dict[chrom][pos][ref][alt]=[gene_ID, gene_name, mutation_name, 'missense_mutation', mut, 'Yes']
+	return targets_dict
+
+def extract_counts(labels, values):
+	labels=labels.split(':')
+	values=values.split(':')
+	for label_number, label in enumerate(labels):
+		if label=='AD':
+			depths=values[label_number].split(',')
+			break
+	if len(depths)==2:
+		ref, alt=depths
+		ref=convert_count(ref)
+		alt=convert_count(alt)
+	elif len(depths)==1:
+		ref=depths[0]
+		ref=convert_count(ref)
+		alt=0
+	else:
+		print('weird depths', labels, values)
+	return ref, alt
+
+def check_targeted(vcf_line, targets_dict, depth_dict, samples):
+	'''
+	checks a vcf_line to see if it's "targeted" using targets_dict and extracts
+	reference and alternate counts for each sample if it is targeted. Outputs
+	the resulting depths to depth_dict
+	'''
+	chrom, pos, ID, ref_allele, alt_allele=vcf_line[:5]
+	mutation_number=1
+	if chrom in targets_dict and pos in targets_dict[chrom] and ref_allele in targets_dict[chrom][pos]:
+		for alt_allele in targets_dict[chrom][pos][ref_allele]:
+			header_list=targets_dict[chrom][pos][ref_allele][alt_allele]
+			for sample_number, sample in enumerate(samples):
+				labels, sample_counts=vcf_line[8], vcf_line[9+sample_number]
+				ref, alt=extract_counts(labels, sample_counts)
+				depth_dict.setdefault(sample, {})
+				depth_dict[sample][mutation_number]=[f'{ref+alt},{ref},{alt}']+header_list
+			mutation_number+=1
+	return depth_dict
+
+def parse_vcf_file(input_vcf, targets_dict):
 	'''
 	searches vcf file for snpEff annotations and retrieves the mutation
 	information and depths associated with the snpeff annotations
 	'''
-	ann_dict={}
+	ann_dict, target_depth_dict={},{}
 	parsed_counter=0
 	if input_vcf.endswith('.gz'):
 		import gzip
@@ -81,7 +144,9 @@ def parse_vcf_file(input_vcf):
 						ann_dict.setdefault(sample, {})
 						ann_dict[sample].setdefault(parsed_counter, [line[8]+';'+line[9+sample_number]])
 					ann_dict[sample][parsed_counter].append(column)
-	return ann_dict
+		elif len(line)>7 and not line[0].startswith('#'):
+			target_depth_dict=check_targeted(line, targets_dict, target_depth_dict, samples)
+	return ann_dict, target_depth_dict
 
 def convert_count(count):
 	if count!='.':
@@ -108,22 +173,7 @@ def parse_annotations(ann_dict, gene_mappings):
 				ExonicFunc=columns[2]
 				targeted='unspecified'
 				labels, values=vcf_fields.split(';')
-				labels=labels.split(':')
-				values=values.split(':')
-				for label_number, label in enumerate(labels):
-					if label=='AD':
-						depths=values[label_number].split(',')
-						break
-				if len(depths)==2:
-					ref, alt=depths
-					ref=convert_count(ref)
-					alt=convert_count(alt)
-				elif len(depths)==1:
-					ref=depths[0]
-					ref=convert_count(ref)
-					alt=0
-				else:
-					print('weird depths', ann_dict[mut])
+				ref, alt=extract_counts(labels, values)
 				protein_dict[sample][mut]=[f'{ref+alt},{ref},{alt}', Gene_ID, gene_name, Mutation_Name, ExonicFunc, AA_change, targeted]
 	return protein_dict
 
@@ -139,6 +189,10 @@ def grab_gene_mappings(input_gff):
 		if line[0].startswith('ID=') and line[1].startswith('Name='):
 			ID=line[0][3:]
 			name=line[1][5:]
+			gene_mappings[ID]=name
+		elif line[0].startswith('ID='):
+			ID=line[0][3:]
+			name=ID
 			gene_mappings[ID]=name
 	return gene_mappings
 
@@ -167,7 +221,9 @@ def output_tables(protein_dict, output_folder):
 				output_line.append(protein_dict[sample][mut][0].split(',')[file_number])
 			output_file.write(','.join(output_line)+'\n')
 
-ann_dict=parse_vcf_file(input_vcf)
 gene_mappings=grab_gene_mappings(input_gff)
+targets_dict=make_targets_dict(targets_tsv, gene_mappings)
+ann_dict, targeted_depth_dict=parse_vcf_file(input_vcf, targets_dict)
+print('targeted dict is', targeted_depth_dict)
 protein_dict=parse_annotations(ann_dict, gene_mappings)
 output_tables(protein_dict, 'test_folder')
