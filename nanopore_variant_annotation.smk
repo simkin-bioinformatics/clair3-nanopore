@@ -18,10 +18,8 @@ sample_subset=['PM2', 'JS-2', 'JS-0-5-7']
 
 rule all:
 	input:
-		#aligned_sam=expand(output_folder+'/sam_files/{sample}_output.sam', sample=all_samples),
-		#indexed_bam=expand(output_folder+'/sorted_bam_files/{sample}_output_sorted.bam.bai', sample=all_samples),
-		clair3_gvcf=expand(output_folder+'/clair3_samples/{sample}/merge_output.gvcf.gz', sample=sample_subset),
-		copied_snakefile=output_folder+'/snakemake_params/nanopore_variant_annotation.smk'
+		copied_snakefile=output_folder+'/snakemake_params/nanopore_variant_annotation.smk',
+		snp_eff_vcf=output_folder+'/snp_Eff_output/annotated_variants.vcf'
 
 rule copy_files:
 	input:
@@ -89,7 +87,7 @@ rule run_clair3:
 		indel_min_af=config['indel_min_af'],
 		clair3_folder=output_folder+'/clair3_samples/{sample}'
 	output:
-		clair3_gvcf=output_folder+'/clair3_samples/{sample}/merge_output.gvcf.gz'
+		clair3_vcf=output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz'
 	shell:
 		'''
 		run_clair3.sh \
@@ -107,3 +105,79 @@ rule run_clair3:
 		--snp_min_af={params.snp_min_af} \
 		--indel_min_af={params.indel_min_af}
 		'''
+
+rule index_vcf:
+	input:
+		clair3_vcf=output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz'
+	output:
+		vcf_index=output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz.csi'
+	shell:
+		'bcftools index {input.clair3_vcf}'
+
+rule merge_vcfs:
+	input:
+		clair3_vcfs=expand(output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz', sample=sample_subset),
+		vcf_indices=expand(output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz.csi', sample=sample_subset)
+	output:
+		merged_vcf=output_folder+'/clair3_multisample/merged_multisample.vcf.gz'
+	shell:
+		'''
+		bcftools merge \
+			{input.clair3_vcfs} \
+			--force-samples -O z -o {output.merged_vcf}
+		'''
+
+rule prepare_snp_eff_database:
+	'''
+	rearranges genome fasta and genome gff files for snp_eff. Specifically:
+	1. makes a 'data' folder in the snpeff folder
+	2. makes a subfolder in 'data' with your desired genome name
+	3. move your gff and genome files to the newly created genome folder and
+	renames your gff file as genes.gff and your genome as sequences.fa
+	4. Adds a line to the config file underneath the data.dir line and puts the
+	name of your genome folder plus .genome, followed by a description,
+	formatted like this: your_desired_name.genome : your_description
+	'''
+	input:
+		snp_eff_folder=config['snp_eff_folder'],
+		genome_fasta=config['genome_fasta'],
+		genome_gff=config['genome_gff']
+	params:
+		database=config['genome_database_name'],
+		description=config['database_description']
+	output:
+		genome_fasta=config['snp_eff_folder']+'/data/'+config['genome_database_name']+'/sequences.fa',
+		genome_gff=config['snp_eff_folder']+'/data/'+config['genome_database_name']+'/genes.gff',
+		temp_config=output_folder+'/snp_eff_folder/snpEff.config'
+	script:
+		'scripts/prepare_snp_eff_database.py'
+
+rule build_snp_eff:
+	input:
+		genome_fasta=config['snp_eff_folder']+'/data/'+config['genome_database_name']+'/sequences.fa',
+	params:
+		snp_eff_folder=config['snp_eff_folder'],
+		database_name=config['genome_database_name']
+	output:
+		snp_eff_database=config['snp_eff_folder']+'/data/'+config['genome_database_name']+'/sequence.bin'
+	shell:
+		'java -Xmx8g -jar {params.snp_eff_folder}/snpEff.jar build -c {params.snp_eff_folder}/snpEff.config -noCheckCds -noCheckProtein {params.database_name}'
+
+rule run_snp_eff:
+	input:
+		snp_eff_jar=config['snp_eff_folder']+'/snpEff.jar',
+		merged_vcf=output_folder+'/clair3_multisample/merged_multisample.vcf.gz',
+		snp_eff_database=config['snp_eff_folder']+'/data/'+config['genome_database_name']+'/sequence.bin'
+	params:
+		database_name=config['genome_database_name']
+	output:
+		snp_eff_stats=output_folder+'/snp_Eff_output/snpEff_summary.html',
+		snp_eff_vcf=output_folder+'/snp_Eff_output/annotated_variants.vcf'
+	shell:
+		'''
+		java -Xmx10g -jar {input.snp_eff_jar} {params.database_name} \
+		{input.merged_vcf} \
+		-stats {output.snp_eff_stats} >{output.snp_eff_vcf}
+		'''
+
+#rule parse_snp_eff:

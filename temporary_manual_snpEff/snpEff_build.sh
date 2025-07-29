@@ -1,1 +1,0 @@
-java -Xmx8g -jar snpEff.jar build -c snpEff.config -noCheckCds -noCheckProtein plasmoDB_3D7_v62
