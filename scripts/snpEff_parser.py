@@ -52,9 +52,13 @@ Targeted - currently hardcoded as 'unspecified'
 '''
 
 #input_vcf='annotated_variants.vcf'
-input_vcf='/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/clair3-nanopore/bienvenu_targeted_nanopore_alignment_no_filters/snp_Eff_output/annotated_variants.vcf'
-input_gff='/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/snpEff/example_UCSC_gff_file/PlasmoDB-62_Pfalciparum3D7.gff'
-targets_tsv='/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/targets.tsv'
+input_vcf=snakemake.input.snp_eff_vcf
+input_gff=snakemake.input.genome_gff
+targets_tsv=snakemake.input.targets_tsv
+coverage_AA=snakemake.output.coverage_AA
+reference_AA=snakemake.output.reference_AA
+alternate_AA=snakemake.output.alternate_AA
+output_paths=[coverage_AA, reference_AA, alternate_AA]
 
 def make_targets_dict(targets_tsv, gene_mappings):
 	'''
@@ -324,10 +328,10 @@ def format_header(output_file, merged_dict, muts):
 			output_line.append(merged_dict[first_sample][mut][row_number+1])
 		output_file.write(','.join(output_line)+'\n')
 
-def output_tables(merged_dict, sorting_list, output_folder):
+def output_tables(merged_dict, sorting_list, output_paths):
 	muts=[entry[1] for entry in sorting_list]
-	for file_number, output_path in enumerate(['coverage_AA_table.csv', 'reference_AA_table.csv', 'alternate_AA_table.csv']):
-		output_file=open(output_folder+'/'+output_path, 'w')
+	for file_number, output_path in enumerate(output_paths):
+		output_file=open(output_path, 'w')
 		format_header(output_file, merged_dict, muts)
 		for sample in merged_dict:
 			output_line=[sample]
@@ -340,4 +344,4 @@ targets_dict, targeted_mutations=make_targets_dict(targets_tsv, gene_mappings)
 ann_dict, targeted_depth_dict=parse_vcf_file(input_vcf, targets_dict)
 protein_dict=parse_annotations(ann_dict, gene_mappings, targeted_mutations)
 merged_dict, sorting_list=fill_in_missing_values(protein_dict, targets_dict, targeted_depth_dict, targeted_mutations)
-output_tables(merged_dict, sorting_list, 'test_folder')
+output_tables(merged_dict, sorting_list, output_paths)

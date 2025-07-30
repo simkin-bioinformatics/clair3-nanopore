@@ -19,7 +19,7 @@ sample_subset=['PM2', 'JS-2', 'JS-0-5-7']
 rule all:
 	input:
 		copied_snakefile=output_folder+'/snakemake_params/nanopore_variant_annotation.smk',
-		snp_eff_vcf=output_folder+'/snp_Eff_output/annotated_variants.vcf'
+		alternate_AA=output_folder+'/AA_tables/alternate_AA_table.csv',
 
 rule copy_files:
 	input:
@@ -116,8 +116,8 @@ rule index_vcf:
 
 rule merge_vcfs:
 	input:
-		clair3_vcfs=expand(output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz', sample=sample_subset),
-		vcf_indices=expand(output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz.csi', sample=sample_subset)
+		clair3_vcfs=expand(output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz', sample=all_samples),
+		vcf_indices=expand(output_folder+'/clair3_samples/{sample}/merge_output.vcf.gz.csi', sample=all_samples)
 	output:
 		merged_vcf=output_folder+'/clair3_multisample/merged_multisample.vcf.gz'
 	shell:
@@ -180,4 +180,14 @@ rule run_snp_eff:
 		-stats {output.snp_eff_stats} >{output.snp_eff_vcf}
 		'''
 
-#rule parse_snp_eff:
+rule parse_snp_eff:
+	input:
+		snp_eff_vcf=output_folder+'/snp_Eff_output/annotated_variants.vcf',
+		genome_gff=config['genome_gff'],
+		targets_tsv=config['targets_tsv']
+	output:
+		coverage_AA=output_folder+'/AA_tables/coverage_AA_table.csv',
+		reference_AA=output_folder+'/AA_tables/reference_AA_table.csv',
+		alternate_AA=output_folder+'/AA_tables/alternate_AA_table.csv',
+	script:
+		'scripts/snpEff_parser.py'
