@@ -132,7 +132,7 @@ rule prepare_snp_eff_database:
 	rearranges genome fasta and genome gff files for snp_eff. Specifically:
 	1. makes a 'data' folder in the snpeff folder
 	2. makes a subfolder in 'data' with your desired genome name
-	3. move your gff and genome files to the newly created genome folder and
+	3. copies your gff and genome files to the newly created genome folder and
 	renames your gff file as genes.gff and your genome as sequences.fa
 	4. Adds a line to the config file underneath the data.dir line and puts the
 	name of your genome folder plus .genome, followed by a description,
