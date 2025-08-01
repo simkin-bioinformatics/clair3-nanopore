@@ -26,14 +26,14 @@ tutorial. Eventually it will automatically perform the following steps:
 - a custom script copies gff and genome files for snpEff
 - snpEff builds a database from gff and genome files
 - snpEff annotates VCF files
+- snpEff VCF gets converted to AA tables with custom script
 
 ## Next Steps (not implemented yet):
 
-- snpEff VCF gets converted to AA tables with custom script
-- add ability to correctly parse "targeted" mutation depths
-- incorporate snpEff converter into snakemake pipeline
-- add ability to concatenate raw nanopore reads (near beginning of pipeline)
+- add ability to concatenate raw demultiplexed nanopore reads (near beginning of
+  pipeline)
 - more detailed yaml file instructions
+- convert this pipeline to a web-app
 
 ## How to run the pipeline:
 
