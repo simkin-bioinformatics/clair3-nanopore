@@ -1,0 +1,21 @@
+fastq_folder: '/home/bienvenu_nsengimaana/sanger_pipeline/data/fastq_output/who_eqa_fastq'
+genome_fasta: '/home/bienvenu_nsengimaana/exampledataset_Alfred_training/3d7_references/PlasmoDB-68_Pfalciparum3D7_Genome.fasta'
+genome_gff: '/home/bienvenu_nsengimaana/exampledataset_Alfred_training/3d7_references/PlasmoDB-68_Pfalciparum3D7.gff'
+output_folder: '/home/bienvenu_nsengimaana/sanger_pipeline/data/fastq_output/who_eqa_clair3_output'
+model_path: '/opt/models/r1041_e82_400bps_sup_v500'
+snp_eff_folder: '/home/bienvenu_nsengimaana/ont_alignments/clair3-nanopore_full/snpEff'
+targets_tsv: '/home/bienvenu_nsengimaana/ont_alignments/clair3-nanopore_full/targets.tsv'
+
+# parameters for clair3 Singularity
+singularity_sif: '/home/bienvenu_nsengimaana/clair3_latest.sif'
+ref_parent_dir: '/home/bienvenu_nsengimaana/exampledataset_Alfred_training'
+output_parent_dir: '/home/bienvenu_nsengimaana/sanger_pipeline/data/fastq_output/who_eqa_clair3_output'
+threads: 6
+
+#name and description of a snpEff database to be built
+genome_database_name: 'Plasmodb_Pfalciparum3D7_v68'
+database_description: 'A database from plasmoDB for P.falciparum3D7 version 68'
+
+#filtering settings for clair3 - leave these alone for now
+snp_min_af: 0.000
+indel_min_af: 0.000
