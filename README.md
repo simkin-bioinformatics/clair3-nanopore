@@ -6,7 +6,7 @@ These AA tables are suitable for calculating prevalences, as well as for
 graphing and visualizing mutations.
 
 The visualization part is handled by another repo, here:
-(https://github.com/simkin-bioinformatics/seekdeep_amplicon_visualization)
+(https://github.com/simkin-bioinformatics/AA_table_visualization)
 
 This clair3-nanopore repository is being written collaboratively as part of a
 tutorial. Eventually it will automatically perform the following steps:
