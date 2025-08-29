@@ -100,6 +100,10 @@ def extract_counts(labels, values):
 		ref=depths[0]
 		ref=convert_count(ref)
 		alt=0
+	elif len(depths)>2:
+		ref, alt=depths[0], depths[1]
+		ref=convert_count(ref)
+		alt=convert_count(alt)
 	else:
 		print('weird depths', labels, values)
 	return ref, alt
@@ -176,7 +180,18 @@ def special_sort(unsorted_list):
 	for entry in unsorted_list:
 		mutation, number=entry
 		gene='-'.join(mutation.split('-')[:-1])
-		aa_pos=int(mutation.split('-')[-1][3:-3])
+		#aa_pos=int(mutation.split('-')[-1][3:-3])
+		numbers=mutation.split('-')[-1][3:]
+		if not numbers[0].isdigit():
+			print('original mutation was', mutation)
+		aa_pos=''
+		for char in numbers:
+			if char.isdigit():
+				aa_pos+=char
+			else:
+				break
+		if aa_pos:
+			aa_pos=int(aa_pos)
 		sorting_list.append([gene, aa_pos, entry])
 	return [item[-1] for item in sorted(sorting_list)]
 
@@ -205,9 +220,9 @@ def merge_dicts(eff_dict, nonzero_dict, zero_dict):
 			merged_dict[sample][zero_new_mut]=zero_dict[sample][mut2]
 	sorting_list=list(set(sorting_list))
 	sorted_list=special_sort(sorting_list)
-	print('sorted is', sorted_list)
-	for sample in merged_dict:
-		print(sample, 'merged is', merged_dict[sample].keys())
+	#print('sorted is', sorted_list)
+	#for sample in merged_dict:
+	#	print(sample, 'merged is', merged_dict[sample].keys())
 	return merged_dict, sorted_list
 
 
@@ -244,11 +259,11 @@ def parse_vcf_file(input_vcf, targets_dict):
 		file_handle=gzip.open(input_vcf, mode='rt')
 	else:
 		file_handle=open(input_vcf)
-	for line in file_handle:
+	for line_number, line in enumerate(file_handle):
 		line=line.strip().split('\t')
 		if line[0].startswith('#CHROM'):
 			samples=line[9:]
-		if not line[0].startswith('#'):
+		if not line[0].startswith('#') and len(line)>7:
 			if line[7].split(';')[-1].startswith('ANN'):
 				unparsed_snpeff=line[7].split('|')
 				for column_number, column in enumerate(unparsed_snpeff):
