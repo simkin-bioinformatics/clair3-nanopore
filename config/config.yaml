@@ -1,10 +1,8 @@
-fastq_folder: '/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/fastq'
-genome_fasta: '/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/Pf_3D7_genome/PlasmoDB-62_Pfalciparum3D7_Genome.fasta'
-genome_gff: '/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/Pf_3D7_genome/PlasmoDB-62_Pfalciparum3D7.gff'
-output_folder: 'bienvenu_targeted_nanopore_alignment_no_filters'
-model_path: '/home/alfred/micromamba/envs/clair3/bin/models/r1041_e82_400bps_sup_v410'
-snp_eff_folder: '/home/alfred/other_people/bnsengim/np_amp_clair3_demo_07-07-25/scratch_space/snp_eff/snpEff'
-targets_tsv: 'targets.tsv'
+fastq_folder: 'resources/fastq'
+genome_fasta: 'resources/PlasmoDB-62_Pfalciparum3D7_Genome.fasta'
+genome_gff: 'resources/PlasmoDB-62_Pfalciparum3D7.gff'
+output_folder: results
+targets_tsv: 'config/targets.tsv'
 
 #name and description of a snpEff database to be built
 genome_database_name: 'plasmoDB_3D7_v62'
