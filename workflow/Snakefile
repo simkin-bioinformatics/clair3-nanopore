@@ -10,15 +10,6 @@ final_merged_vcf = results / 'clair3_multisample' / 'merged_multisample.vcf.gz'
 all_samples = [f.name.replace('.fastq.gz', '') for f in fastq_folder.glob('*.fastq.gz')]
 sample_subset = config['sample_subset']
 
-rule all:
-	input:
-		# rules.snpeff_all.input,
-		# merged_vcf = final_merged_vcf,
-		copied_snakefile = results / 'config' / 'Snakefile',
-		copied_config = results / 'config' / 'config.yaml',
-		copied_targets = results / 'config' / 'targets.tsv',
-		clair3_vcf = expand(results / 'clair3_samples' / "{sample}" / 'merge_output.vcf.gz', sample = all_samples)
-
 module snp_eff_annotation:
 	snakefile:
 		github(
@@ -28,15 +19,25 @@ module snp_eff_annotation:
 		)
 	config: config
 
-# use rule * from snp_eff_annotation exclude copy_config as snpeff_*
+use rule * from snp_eff_annotation exclude copy_config as snpeff_*
 
-# use rule run_snp_eff from snp_eff_annotation as snpeff_run_snp_eff with:
-# 	input:
-# 		snp_eff_config = results / 'snpEff_processing' / 'snpEff.config',
-# 		snp_eff_database = (
-# 			results / 'snpEff_processing' / 'data' / config['genome_database_name'] / 'sequence.bin'
-# 		),
-# 		merged_vcf = final_merged_vcf
+use rule run_snp_eff from snp_eff_annotation as snpeff_run_snp_eff with:
+	input:
+		snp_eff_config = results / 'snpEff_processing' / 'snpEff.config',
+		snp_eff_database = (
+			results / 'snpEff_processing' / 'data' / config['genome_database_name'] / 'sequence.bin'
+		),
+		merged_vcf = final_merged_vcf
+
+rule all:
+	default_target: True
+	input:
+		rules.snpeff_all.input,
+		# merged_vcf = final_merged_vcf,
+		copied_snakefile = results / 'config' / 'Snakefile',
+		copied_config = results / 'config' / 'config.yaml',
+		copied_targets = results / 'config' / 'targets.tsv',
+		# clair3_vcf = expand(results / 'clair3_samples' / "{sample}" / 'merge_output.vcf.gz', sample = all_samples)
 
 rule copy_files:
 	input:
@@ -112,29 +113,29 @@ rule run_clair3:
 			--indel_min_af={params.indel_min_af}
 		'''
 
-# rule index_vcf:
-# 	input:
-# 		clair3_vcf = results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz'
-# 	output:
-# 		vcf_index = results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz.csi'
-# 	shell:
-# 		'bcftools index {input.clair3_vcf}'
+rule index_vcf:
+	input:
+		clair3_vcf = results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz'
+	output:
+		vcf_index = results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz.csi'
+	shell:
+		'bcftools index {input.clair3_vcf}'
 
-# rule merge_vcfs:
-# 	input:
-# 		clair3_vcfs = expand(
-# 			results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz', 
-# 			sample=all_samples),
-# 		vcf_indices = expand(
-# 			results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz.csi', 
-# 			sample=all_samples)
-# 	output:
-# 		merged_vcf = final_merged_vcf
-# 	shell:
-# 		'''
-# 		bcftools merge \
-# 			{input.clair3_vcfs} \
-# 			--force-samples \
-# 			-O z \
-# 			-o {output.merged_vcf}
-# 		'''
+rule merge_vcfs:
+	input:
+		clair3_vcfs = expand(
+			results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz', 
+			sample=all_samples),
+		vcf_indices = expand(
+			results / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz.csi', 
+			sample=all_samples)
+	output:
+		merged_vcf = final_merged_vcf
+	shell:
+		'''
+		bcftools merge \
+			{input.clair3_vcfs} \
+			--force-samples \
+			-O z \
+			-o {output.merged_vcf}
+		'''
