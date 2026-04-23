@@ -6,7 +6,7 @@ platforms = ["linux-64"]
 version = "0.1.0"
 
 [tasks]
-clair3 = "pixi install -a && snakemake -s nanopore_variant_annotation.smk --unlock && snakemake -s nanopore_variant_annotation.smk -c 8 --rerun-incomplete"
+clair3 = "pixi install -a && snakemake --unlock && snakemake -c 8 --rerun-incomplete"
 
 [dependencies]
 snakemake = ">=9.19.0,<10"
@@ -14,3 +14,4 @@ minimap2 = ">=2.30,<3"
 samtools = ">=1.23.1,<2"
 clair3 = ">=2.0.0,<3"
 bcftools = ">=1.23.1,<2"
+snpeff = ">=5.4.0c,<6"
