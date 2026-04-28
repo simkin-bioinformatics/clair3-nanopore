@@ -1,0 +1,28 @@
+
+# 
+#----------------------------------------------
+fastq_folder: '/home/charlie/data/fastqs/MSMT_catherine_ONT_files/Lab_strains_ONT'
+genome_fasta: '/home/charlie/data/genomes_and_annotations/Pf3D7/Pf3D7.fasta'
+genome_gff: '/home/charlie/data/genomes_and_annotations/Pf3D7/Pf3D7.gff'
+output_directory: 'results'
+model_path: '/home/charlie/data/clair3_models/r1041_e82_400bps_sup_v410'
+targets_tsv: 'config/targets.tsv'
+# targets_vcf: 'config/targets.vcf'
+
+#name and description of a snpEff database to be built
+genome_database_name: 'plasmoDB_3D7_v62'
+database_description: 'A database for plasmoDB version 62'
+
+#filtering settings for clair3 - leave these alone for now
+snp_min_af: 0.08
+indel_min_af: 0.15
+
+sample_subset:
+  - PM2
+  - JS-2
+  - JS-0-5-7
+
+# options are "combined" or "targets_only"
+# "combined" will use both the discovery and targets vcfs
+# "targets_only" will use only the targets vcfs
+aa_table_creation_mode: "targets_only" 

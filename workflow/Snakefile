@@ -1,0 +1,210 @@
+configfile: 'config/config.yaml'
+
+from pathlib import Path
+import os
+
+results = Path(config['output_directory'])
+fastq_folder = Path(config['fastq_folder'])
+
+final_merged_vcf = results / 'clair3_output' / 'merged_multisample_targets_and_discovery.vcf.gz'
+final_merged_vcf_targets = results / 'clair3_output' / 'merged_multisample_targets_only.vcf.gz'
+aa_table_input_vcf = final_merged_vcf if config['aa_table_creation_mode'] == 'combined' else final_merged_vcf_targets
+
+all_samples = [f.name.replace('.fastq.gz', '') for f in fastq_folder.glob('*.fastq.gz')]
+sample_subset = config['sample_subset']
+
+# -----------------------------------------------------------------------------------
+# import snpeff module
+module snp_eff_annotation:
+	snakefile:
+		github(
+			"simkin-bioinformatics/snp_eff_annotation", 
+			path = "/workflow/Snakefile", 
+			commit = "978e100c3434661dc47f2620cd591d581be70d43"
+		)
+	config: config
+
+use rule * from snp_eff_annotation exclude copy_config as snpeff_*
+
+use rule run_snp_eff from snp_eff_annotation as snpeff_run_snp_eff with:
+	input:
+		snp_eff_config = results / 'snpEff_processing' / 'snpEff.config',
+		snp_eff_database = (
+			results / 'snpEff_processing' / 'data' / config['genome_database_name'] / 'sequence.bin'
+		),
+		merged_vcf = aa_table_input_vcf
+# -----------------------------------------------------------------------------------
+
+rule all:
+	default_target: True
+	input:
+		rules.snpeff_all.input,
+		copied_workflow = directory(results / 'config' / 'workflow'),
+		copied_config = results / 'config' / 'config.yaml',
+		copied_targets_tsv = results / 'config' / 'targets.tsv',
+
+rule copy_files:
+	input:
+		workflow = 'workflow',
+		config = 'config/config.yaml',
+		targets_tsv = config['targets_tsv']
+	output:
+		copied_workflow = directory(results / 'config' / 'workflow'),
+		copied_config = results / 'config' / 'config.yaml',
+		copied_targets_tsv = results / 'config' / 'targets.tsv',
+	shell:
+		'''
+		rsync -a {input.workflow} {output.copied_workflow}
+		rsync -a {input.config} {output.copied_config}
+		rsync -a {input.targets_tsv} {output.copied_targets_tsv}
+		'''
+
+rule run_minimap:
+	input:
+		genome = config['genome_fasta'],
+		sample = fastq_folder / '{sample}.fastq.gz'
+	output:
+		aligned_sam = results / "minimap_output" / 'sam_files' / '{sample}_output.sam'
+	shell:
+		'minimap2 -ax map-ont -o {output.aligned_sam} {input.genome} {input.sample}'
+
+rule index_genome:
+	input:
+		genome = config['genome_fasta']
+	output:
+		genome_index = config['genome_fasta'] + '.fai'
+	shell:
+		'samtools faidx {input.genome}'
+
+rule index_and_sort_sam:
+	input:
+		aligned_sam = results / "minimap_output" / 'sam_files' / '{sample}_output.sam'
+	output:
+		sorted_bam = results / "minimap_output" / 'sorted_bam_files' / '{sample}_output_sorted.bam',
+		indexed_bam = results / "minimap_output" / 'sorted_bam_files' / "{sample}_output_sorted.bam.csi",
+	shell:
+		'''
+		samtools sort --write-index -o {output.sorted_bam} {input.aligned_sam}
+		'''
+
+rule tsv_to_vcf:
+	input: config['targets_tsv']
+	output: results / 'config' / 'targets.vcf'
+	shell: 'python workflow/scripts/tsv_to_vcf.py {input} {output}'
+
+rule run_clair3_discovery:
+	input:
+		genome = config['genome_fasta'],
+		genome_index = config['genome_fasta']+'.fai',
+		indexed_bam = results / "minimap_output" / 'sorted_bam_files' / "{sample}_output_sorted.bam.csi",
+		sorted_bam = results / "minimap_output" / 'sorted_bam_files' / "{sample}_output_sorted.bam",
+	params:
+		model_path = config['model_path'],
+		snp_min_af = config['snp_min_af'],
+		indel_min_af = config['indel_min_af'],
+	output:
+		clair3_vcf = results / "clair3_output" / 'clair3_discovery' / "{sample}" / 'merge_output.vcf.gz'
+	threads: 6
+	shell:
+		'''
+		run_clair3.sh \
+			--bam_fn={input.sorted_bam} \
+			--ref_fn={input.genome} \
+			--threads={threads} \
+			--platform=ont \
+			--model_path={params.model_path} \
+			--output=$(dirname {output.clair3_vcf}) \
+			--include_all_ctgs \
+			--no_phasing_for_fa \
+			--sample_name={wildcards.sample} \
+			--snp_min_af={params.snp_min_af} \
+			--indel_min_af={params.indel_min_af}
+		bcftools view -f PASS -O z -o {output.clair3_vcf}.tmp {output.clair3_vcf}
+		mv {output.clair3_vcf}.tmp {output.clair3_vcf}
+		'''
+			# --gvcf
+			# --bed_fn={params.targets_bed}
+
+
+rule run_clair3_targets:
+	input:
+		genome = config['genome_fasta'],
+		genome_index = config['genome_fasta']+'.fai',
+		indexed_bam = results / "minimap_output" / 'sorted_bam_files' / "{sample}_output_sorted.bam.csi",
+		sorted_bam = results / "minimap_output" / 'sorted_bam_files' / "{sample}_output_sorted.bam",
+		targets_vcf = results / 'config' / 'targets.vcf',
+	params:
+		model_path = config['model_path'],
+		snp_min_af = config['snp_min_af'],
+		indel_min_af = config['indel_min_af'],
+	output:
+		clair3_vcf = results / "clair3_output" / 'clair3_targets' / "{sample}" / 'merge_output.vcf.gz'
+	threads: 6
+	shell:
+		'''
+		run_clair3.sh \
+			--bam_fn={input.sorted_bam} \
+			--ref_fn={input.genome} \
+			--threads={threads} \
+			--platform=ont \
+			--model_path={params.model_path} \
+			--output=$(dirname {output.clair3_vcf}) \
+			--include_all_ctgs \
+			--print_ref_calls \
+			--no_phasing_for_fa \
+			--sample_name={wildcards.sample} \
+			--snp_min_af={params.snp_min_af} \
+			--indel_min_af={params.indel_min_af} \
+			--vcf_fn={input.targets_vcf}
+		'''
+
+rule index_vcf:
+	input: '{path}.vcf.gz'
+	output: '{path}.vcf.gz.csi'
+	shell: 'bcftools index {input}'
+
+rule merge_per_sample:
+	input:
+		discovery_vcf = results / "clair3_output" / 'clair3_discovery' / '{sample}' / 'merge_output.vcf.gz',
+		discovery_index = results / "clair3_output" / 'clair3_discovery' / '{sample}' / 'merge_output.vcf.gz.csi',
+		targets_vcf = results / "clair3_output" / 'clair3_targets' / '{sample}' / 'merge_output.vcf.gz',
+		targets_index = results / "clair3_output" / 'clair3_targets' / '{sample}' / 'merge_output.vcf.gz.csi',
+	output:
+		merged_vcf = results / "clair3_output" / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz'
+	shell:
+		'''
+		bcftools concat --allow-overlaps -d all \
+			{input.discovery_vcf} {input.targets_vcf} \
+			| bcftools sort -O z -o {output.merged_vcf}
+		'''
+
+rule merge_vcfs:
+	input:
+		clair3_vcfs = expand(
+			results / "clair3_output" / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz',
+			sample=all_samples),
+		vcf_indices = expand(
+			results / "clair3_output" / 'clair3_samples' / '{sample}' / 'merge_output.vcf.gz.csi',
+			sample=all_samples),
+		clair3_vcfs_targets = expand(
+			results / "clair3_output" / 'clair3_targets' / '{sample}' / 'merge_output.vcf.gz',
+			sample=all_samples),
+		vcf_indices_targets = expand(
+			results / "clair3_output" / 'clair3_targets' / '{sample}' / 'merge_output.vcf.gz.csi',
+			sample=all_samples),
+	output:
+		merged_vcf = final_merged_vcf,
+		merged_vcf_targets = final_merged_vcf_targets
+	shell:
+		'''
+		bcftools merge \
+			{input.clair3_vcfs} \
+			--force-samples \
+			-O z \
+			-o {output.merged_vcf}
+		bcftools merge \
+			{input.clair3_vcfs_targets} \
+			--force-samples \
+			-O z \
+			-o {output.merged_vcf_targets}
+		'''
